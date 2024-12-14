@@ -9,6 +9,8 @@ import (
 	"log"
 	"math/rand"
 	"os"
+	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -16,28 +18,48 @@ import (
 func obfuscate(word string, level int) string {
 	switch level {
 	case 1:
-		concatenated := ""
-		for _, char := range word {
-			concatenated += obfuscateCharacter(char)
-		}
-		concatenated = strings.TrimSuffix(concatenated, ",")
-		return fmt.Sprintf("$obfuscated = $([char[]](%s) -join ''); Invoke-Expression $obfuscated", concatenated)
+		return obfuscateLevel1(word)
 	case 2:
-		encoded := base64.StdEncoding.EncodeToString([]byte(word))
-		return fmt.Sprintf("$obfuscated = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('%s')); Invoke-Expression $obfuscated", encoded)
+		return obfuscateLevel2(word)
 	case 3:
-		encoded := base64.StdEncoding.EncodeToString([]byte(word))
-		return fmt.Sprintf("$e = [System.Convert]::FromBase64String('%s'); $obfuscated = [System.Text.Encoding]::UTF8.GetString($e); Invoke-Expression $obfuscated", encoded)
+		return obfuscateLevel3(word)
 	case 4:
-		encoded := compressAndEncode(word)
-		return fmt.Sprintf("$compressed = '%s'; $bytes = [System.Convert]::FromBase64String($compressed); $stream = New-Object IO.MemoryStream(, $bytes); $decompressed = New-Object IO.Compression.GzipStream($stream, [IO.Compression.CompressionMode]::Decompress); $reader = New-Object IO.StreamReader($decompressed); $obfuscated = $reader.ReadToEnd(); Invoke-Expression $obfuscated", encoded)
+		return obfuscateLevel4(word)
 	case 5:
-		fragments := fragmentScript(word)
-		return fmt.Sprintf("$fragments = @('%s'); $script = $fragments -join ''; Invoke-Expression $script", strings.Join(fragments, "','"))
+		return obfuscateLevel5(word)
 	default:
 		log.Panicf("Unsupported obfuscation level: %d", level)
 		return ""
 	}
+}
+
+func obfuscateLevel1(word string) string {
+	concatenated := ""
+	for _, char := range word {
+		concatenated += obfuscateCharacter(char)
+	}
+	concatenated = strings.TrimSuffix(concatenated, ",")
+	return fmt.Sprintf("$obfuscated = $([char[]](%s) -join ''); Invoke-Expression $obfuscated", concatenated)
+}
+
+func obfuscateLevel2(word string) string {
+	encoded := base64.StdEncoding.EncodeToString([]byte(word))
+	return fmt.Sprintf("$obfuscated = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('%s')); Invoke-Expression $obfuscated", encoded)
+}
+
+func obfuscateLevel3(word string) string {
+	encoded := base64.StdEncoding.EncodeToString([]byte(word))
+	return fmt.Sprintf("$e = [System.Convert]::FromBase64String('%s'); $obfuscated = [System.Text.Encoding]::UTF8.GetString($e); Invoke-Expression $obfuscated", encoded)
+}
+
+func obfuscateLevel4(word string) string {
+	encoded := compressAndEncode(word)
+	return fmt.Sprintf(`$compressed = '%s'; $bytes = [System.Convert]::FromBase64String($compressed); $stream = New-Object IO.MemoryStream(, $bytes); $decompressed = New-Object IO.Compression.GzipStream($stream, [IO.Compression.CompressionMode]::Decompress); $reader = New-Object IO.StreamReader($decompressed); $obfuscated = $reader.ReadToEnd(); Invoke-Expression $obfuscated`, encoded)
+}
+
+func obfuscateLevel5(word string) string {
+	fragments := fragmentScript(word)
+	return fmt.Sprintf(`$fragments = @('%s'); $script = $fragments -join ''; Invoke-Expression $script`, strings.Join(fragments, "','"))
 }
 
 func obfuscateCharacter(char rune) string {
@@ -130,6 +152,35 @@ func randomString(length int) string {
 	return b.String()
 }
 
+func copyToClipboard(text string) error {
+	switch runtime.GOOS {
+	case "linux":
+		cmd := exec.Command("xsel", "--clipboard", "--input")
+		cmd.Stdin = strings.NewReader(text)
+		return cmd.Run()
+	case "darwin":
+		cmd := exec.Command("pbcopy")
+		cmd.Stdin = strings.NewReader(text)
+		return cmd.Run()
+	default:
+		return fmt.Errorf("clipboard functionality is not supported on this OS: %s", runtime.GOOS)
+	}
+}
+
+func processInput(inputFile, command string) (string, error) {
+	if command != "" {
+		return command, nil
+	} else if inputFile != "" {
+		content, err := os.ReadFile(inputFile)
+		if err != nil {
+			return "", fmt.Errorf("could not read the input file: %w", err)
+		}
+		return string(content), nil
+	} else {
+		return "", fmt.Errorf("no input provided")
+	}
+}
+
 func main() {
 	fmt.Println(`
 	██████╗ ███████╗ ██████╗ ██████╗ ███████╗
@@ -137,16 +188,24 @@ func main() {
 	██████╔╝███████╗██║   ██║██████╔╝█████╗  
 	██╔═══╝ ╚════██║██║   ██║██╔══██╗██╔══╝  
 	██║     ███████║╚██████╔╝██████╔╝██║     
-	╚═╝     ╚══════╝ ╚═════╝ ╚═════╝ ╚═╝     
+	╚═╝     ╚══════╝ ╚═════╝ ╚═╝     
 	@TaurusOmar 
-	v.1.0											 								
-	  `)
+	v.1.3						  
+	`)
+
 	inputFile := flag.String("i", "", "Name of the PowerShell script file.")
+	inputFileAlias := flag.String("input", "", "Alias for the name of the PowerShell script file.")
 	outputFile := flag.String("o", "obfuscated.ps1", "Name of the output file for the obfuscated script.")
-	level := flag.Int("level", 1, "Obfuscation level (1 to 5).")
+	outputFileAlias := flag.String("output", "", "Alias for the name of the output file for the obfuscated script.")
+	level := flag.Int("l", 1, "Obfuscation level (1 to 5).")
+	levelAlias := flag.Int("level", 0, "Alias for the obfuscation level.")
+	command := flag.String("c", "", "PowerShell command to obfuscate.")
+	commandAlias := flag.String("command", "", "Alias for the PowerShell command to obfuscate.")
+	toClipboard := flag.Bool("clipboard", false, "Copy the obfuscated script to the clipboard instead of writing to a file.")
+	toClipboardAlias := flag.Bool("clip", false, "Alias to copy the obfuscated script to the clipboard.")
 
 	flag.Usage = func() {
-		fmt.Println("Usage: ./obfuscator -i <inputFile> -o <outputFile> -level <1|2|3|4|5>")
+		fmt.Println("Usage: ./psobf [-i <inputFile> | --input <inputFile> | -c <command> | --command <command>] [-o <outputFile> | --output <outputFile>] [-l <1|2|3|4|5> | --level <1|2|3|4|5>] [--clipboard | -clip]")
 		fmt.Println("Options:")
 		flag.PrintDefaults()
 		fmt.Println("\nObfuscation levels:")
@@ -159,22 +218,46 @@ func main() {
 
 	flag.Parse()
 
-	if *inputFile == "" {
+	if *inputFileAlias != "" {
+		*inputFile = *inputFileAlias
+	}
+	if *outputFileAlias != "" {
+		*outputFile = *outputFileAlias
+	}
+	if *levelAlias != 0 {
+		*level = *levelAlias
+	}
+	if *commandAlias != "" {
+		*command = *commandAlias
+	}
+	if *toClipboardAlias {
+		*toClipboard = true
+	}
+
+	if *inputFile == "" && *command == "" {
+		fmt.Println("Error: Either -i (input file) or -c (command) must be provided.")
 		flag.Usage()
 		return
 	}
 
-	psScript, err := os.ReadFile(*inputFile)
+	psScript, err := processInput(*inputFile, *command)
 	if err != nil {
-		log.Panicf("Could not read the file: %v", err)
+		log.Panic(err)
 	}
 
-	obfuscated := obfuscate(string(psScript), *level)
+	obfuscated := obfuscate(psScript, *level)
 
-	err = os.WriteFile(*outputFile, []byte(obfuscated), 0644)
-	if err != nil {
-		log.Panicf("Could not write to the file: %v", err)
+	if *toClipboard {
+		err := copyToClipboard(obfuscated)
+		if err != nil {
+			log.Panicf("Could not copy to clipboard: %v", err)
+		}
+		fmt.Println("The obfuscated script has been copied to the clipboard.")
+	} else {
+		err = os.WriteFile(*outputFile, []byte(obfuscated), 0644)
+		if err != nil {
+			log.Panicf("Could not write to the file: %v", err)
+		}
+		fmt.Println("The obfuscated script has been written to", *outputFile)
 	}
-
-	fmt.Println("The obfuscated script has been written to", *outputFile)
 }
