@@ -18,7 +18,7 @@ Supports 5 levels of obfuscation plus a transforms/pipeline architecture that al
 	██║     ███████║╚██████╔╝██████╔╝██║
 	╚═╝     ╚══════╝ ╚═════╝ ╚═════╝ ╚═╝
 	@TaurusOmar
-	v.2.0											 	
+	v.1.1.4											 	
 	
 Usage: ./psobf -i <inputFile> -o <outputFile> -level <1|2|3|4|5> [options]
 
