@@ -509,7 +509,7 @@ psobf -i sample.ps1 -o out.ps1 -level 5 -pipeline "strenc,frag" -strenc rc4 -str
               │ read (-i / -stdin)
               ▼
        ┌──────────────┐
-       │   Pipeline   │  order you choose
+       │ Pipeline     │  order you choose
        │ iden         │  rename vars/funcs
        │ strenc       │  XOR/RC4 literals
        │ stringdict   │  tokenize + rejoin
