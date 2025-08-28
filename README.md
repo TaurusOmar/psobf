@@ -52,11 +52,7 @@ Usage: ./psobf -i <inputFile> -o <outputFile> -level <1|2|3|4|5> [options]
 ## Installation
 
 ```bash
-go install github.com/TaurusOmar/psobf@latest
-# or build locally:
-git clone https://github.com/TaurusOmar/psobf
-cd psobf
-go build -o psobf
+go install github.com/TaurusOmar/psobf/cmd/psobf@latest
 ```
 
 ---
