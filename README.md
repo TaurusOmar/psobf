@@ -51,7 +51,7 @@ Usage: ./psobf -i <inputFile> -o <outputFile> -level <1|2|3|4|5> [options]
 ## Features
 
 <h1 align="center">
-  <img src="static/poc.gif alt="subfinder" width="700px"></a>
+  <img src="static/poc.gif" alt="psobf" width="700px"></a>
   <br>
 </h1>
 
