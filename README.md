@@ -17,7 +17,7 @@ Supports 5 levels of obfuscation plus a transforms/pipeline architecture that al
 	██╔═══╝ ╚════██║██║   ██║██╔══██╗██╔══╝
 	██║     ███████║╚██████╔╝██████╔╝██║
 	╚═╝     ╚══════╝ ╚═════╝ ╚═════╝ ╚═╝
-	@TaurusOmar
+	Omar Salazar
 	v.1.1.5											 	
 	
 Usage: ./psobf -i <inputFile> -o <outputFile> -level <1|2|3|4|5> [options]
@@ -48,6 +48,14 @@ Usage: ./psobf -i <inputFile> -o <outputFile> -level <1|2|3|4|5> [options]
   -varrename		Deprecated: kept for backward-compatibility. Use -iden obf.
 ```
 
+## Features
+
+<h1 align="center">
+  <img src="static/poc.gif alt="subfinder" width="700px"></a>
+  <br>
+</h1>
+
+--- 
 
 ## Installation
 
