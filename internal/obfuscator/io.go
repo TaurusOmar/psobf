@@ -28,7 +28,7 @@ func fuzzOutName(base string, i int) string {
 
 func requireInOut(opts Options) error {
 	if !opts.UseStdin && opts.InputFile == "" && opts.Fuzz == 0 {
-		return errors.New("./psobf -i <inputFile> -o <outputFile> -level <1|2|3|4|5> [options]")
+		return errors.New("./psobf -i <inputFile> -o <outputFile> -level <1|2|3|4|5|6> [options]")
 	}
 	if !opts.UseStdout && opts.OutputFile == "" && opts.Fuzz == 0 {
 		return errors.New("missing -o or -stdout")
