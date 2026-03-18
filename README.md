@@ -75,7 +75,7 @@ Examples:
 ## Installation
 
 ```bash
-go install github.com/TaurusOmar/psobf/v2/cmd/psobf@v2.0.0
+go install github.com/TaurusOmar/psobf/v2/cmd/psobf@v2.0.1
 ```
 
 ---
@@ -104,7 +104,7 @@ psobf -h   # full help
 ## Installation
 
 ```bash
-go install github.com/TaurusOmar/psobf/cmd/psobf@v2.0.0
+go install github.com/TaurusOmar/psobf/cmd/psobf@v2.0.1
 ```
 
 ---
