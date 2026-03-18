@@ -13,7 +13,7 @@ func ParseFlags() Options {
 	opts := Options{}
 	flag.StringVar(&opts.InputFile, "i", "", "PowerShell script input file (use -stdin).")
 	flag.StringVar(&opts.OutputFile, "o", "obfuscated.ps1", "Output file (use -stdout).")
-	flag.IntVar(&opts.Level, "level", 1, "Obfuscation level (1..5).")
+	flag.IntVar(&opts.Level, "level", 1, "Obfuscation level (1..6). Level 6 uses AES-256 encryption.")
 	flag.BoolVar(&opts.NoExec, "noexec", false, "Emit only payload without Invoke-Expression.")
 	flag.BoolVar(&opts.UseStdin, "stdin", false, "Read script from STDIN.")
 	flag.BoolVar(&opts.UseStdout, "stdout", false, "Write result to STDOUT.")
@@ -21,7 +21,7 @@ func ParseFlags() Options {
 	flag.IntVar(&opts.MinFrag, "minfrag", 10, "Minimum fragment size (level 5).")
 	flag.IntVar(&opts.MaxFrag, "maxfrag", 20, "Maximum fragment size (level 5).")
 	flag.BoolVar(&opts.Quiet, "q", false, "Quiet mode (no banner).")
-	flag.StringVar(&opts.Pipeline, "pipeline", "", "Comma-separated transforms: iden,strenc,stringdict,numenc,fmt,cf,dead")
+	flag.StringVar(&opts.Pipeline, "pipeline", "", "Comma-separated transforms: iden,strenc,stringdict,numenc,fmt,cf,dead,hexenc,alias,unicode,antidebug,iexobf")
 	flag.IntVar(&opts.StringDict, "stringdict", 0, "String tokenization percentage (0..100).")
 	flag.StringVar(&opts.StrEnc, "strenc", "off", "String encryption: off|xor|rc4.")
 	flag.StringVar(&opts.StrKeyHex, "strkey", "", "Hex key for -strenc.")
@@ -34,10 +34,50 @@ func ParseFlags() Options {
 	flag.StringVar(&opts.FragProfile, "frag", "", "Fragmentation profile: profile=tight|medium|loose.")
 	flag.StringVar(&opts.Profile, "profile", "", "Preset: light|balanced|heavy.")
 	flag.IntVar(&opts.Fuzz, "fuzz", 0, "Generate N fuzzed variants (unique seeds).")
+	flag.IntVar(&opts.Polymorphism, "poly", 0, "Generate N polymorphic variants per transformation.")
 	var seed int64
 	flag.Int64Var(&seed, "seed", 0, "RNG seed (reproducible). Overrides crypto/rand if set.")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage:\n  psobf -i input.ps1 -o out.ps1 -level 1..5 [options]\n\n")
+		fmt.Fprintf(os.Stderr, `
+Usage: psobf -i <inputFile> -o <outputFile> -level <1|2|3|4|5|6> [options]
+
+Obfuscation Levels:
+  1 - Char join encoding
+  2 - Base64 encoding
+  3 - Base64 encoding (alternate)
+  4 - GZip + Base64 compression
+  5 - Script fragmentation
+  6 - AES-256 CTR encryption (NEW in v1.2)
+
+Transform Pipeline Options (use with -pipeline):
+  iden       - Identifier morphing (use with -iden obf)
+  strenc     - String encryption (use with -strenc xor|rc4)
+  stringdict - String tokenization (use with -stringdict N)
+  numenc     - Number encoding
+  fmt        - Format jitter (use with -fmt jitter)
+  cf         - Control flow obfuscation (use with -cf-opaque, -cf-shuffle)
+  dead       - Dead code injection (use with -deadcode N)
+  hexenc     - Hex string encoding (NEW)
+  alias      - Cmdlet alias substitution (NEW)
+  unicode    - Unicode character encoding (NEW)
+  antidebug  - Anti-debugging/VM detection (NEW)
+  iexobf     - Invoke-Expression obfuscation (NEW)
+
+Examples:
+  # Simple obfuscation
+  psobf -i script.ps1 -o out.ps1 -level 2
+
+  # AES encryption with heavy profile
+  psobf -i script.ps1 -o out.ps1 -level 6 -profile heavy
+
+  # All new transforms
+  psobf -i script.ps1 -o out.ps1 -level 4 -pipeline "iden,alias,hexenc,antidebug,iexobf" -iden obf
+
+  # RC4 string encryption
+  psobf -i script.ps1 -o out.ps1 -level 4 -pipeline "strenc" -strenc rc4 -strkey 0011223344556677
+
+Flags:
+`)
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -211,6 +251,16 @@ func buildPipeline(opts *Options, strKey []byte) ([]Transform, error) {
 				out = append(out, &DeadCodeTransform{Prob: opts.DeadProb})
 			}
 		case "frag":
+		case "hexenc":
+			out = append(out, &HexEncodeTransform{})
+		case "alias":
+			out = append(out, &AliasSubstitutionTransform{})
+		case "unicode":
+			out = append(out, &UnicodeTransform{Percent: 30})
+		case "antidebug":
+			out = append(out, &AntiDebugTransform{Level: 2})
+		case "iexobf":
+			out = append(out, &IEXObfuscationTransform{})
 		default:
 			if it != "" {
 				return nil, fmt.Errorf("unknown pipeline item: %s", it)

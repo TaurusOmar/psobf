@@ -24,8 +24,8 @@ func Run(opts Options) error {
 	if err := requireInOut(opts); err != nil {
 		return err
 	}
-	if opts.Level < 1 || opts.Level > 5 {
-		return fmt.Errorf("invalid level: %d (valid 1..5)", opts.Level)
+	if opts.Level < 1 || opts.Level > 6 {
+		return fmt.Errorf("invalid level: %d (valid 1..6)", opts.Level)
 	}
 	if opts.StringDict < 0 || opts.StringDict > 100 {
 		return fmt.Errorf("invalid -stringdict: %d (0..100)", opts.StringDict)
@@ -75,7 +75,7 @@ func processOnce(opts Options, data []byte, strKey []byte) error {
 	ctx := &Ctx{
 		Rng:       r,
 		Opts:      &opts,
-		InputHash: hex.EncodeToString(SumSha256(data)),
+		inputHash: hex.EncodeToString(SumSha256(data)),
 		Helpers:   map[string]bool{},
 	}
 	ps := string(data)
@@ -108,7 +108,7 @@ func ObfuscateString(ps string, opts Options) (string, error) {
 	ctx := &Ctx{
 		Rng:       r,
 		Opts:      &opts,
-		InputHash: "",
+		inputHash: "",
 		Helpers:   map[string]bool{},
 	}
 	key, err := parseHexKey(opts.StrKeyHex)

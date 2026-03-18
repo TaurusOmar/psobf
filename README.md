@@ -18,7 +18,7 @@ Supports 5 levels of obfuscation plus a transforms/pipeline architecture that al
 	██║     ███████║╚██████╔╝██████╔╝██║
 	╚═╝     ╚══════╝ ╚═════╝ ╚═════╝ ╚═╝
 	Omar Salazar
-	v.1.1.5											 	
+	v.1.2.0										 	
 	
 Usage: ./psobf -i <inputFile> -o <outputFile> -level <1|2|3|4|5> [options]
 
@@ -86,7 +86,7 @@ psobf -h   # full help
 | ------------- | ----------------- | ---------------: | ------------------------------------------- | ------------------------------------------------------------ | ------------------------------- | ---------------------- |
 | `-i`          | string            |                — | Input PS1 (use `-stdin` to read from pipe)  | `-i script.ps1`                                              |                                 |                        |
 | `-o`          | string            | `obfuscated.ps1` | Output (use `-stdout` to write to STDOUT)   | `-o out.ps1`                                                 |                                 |                        |
-| `-level`      | 1..5              |                1 | Final packer (see Levels)                   | `-level 4`                                                   |                                 |                        |
+| `-level`      | 1..6              |                1 | Final packer (see Levels)                   | `-level 4`                                                   |                                 |                        |
 | `-noexec`     | bool              |            false | Emit only payload (no `Invoke-Expression`)  | `-noexec`                                                    |                                 |                        |
 | `-stdin`      | bool              |            false | Read PS from STDIN                          | `-stdin`                                                     |                                 |                        |
 | `-stdout`     | bool              |            false | Write result to STDOUT                      | `-stdout`                                                    |                                 |                        |
@@ -107,6 +107,7 @@ psobf -h   # full help
 | `-maxfrag`    | int               |               20 | Max fragment size (level 5)                 | `-maxfrag 16`                                                |                                 |                        |
 | `-profile`    | \`light           |         balanced | heavy\`                                     | —                                                            | Presets for pipeline/seed/etc.  | `-profile heavy`       |
 | `-fuzz`       | int               |                0 | Produce N variants (different seeds)        | `-fuzz 5`                                                    |                                 |                        |
+| `-poly`       | int               |                0 | Polymorphic variants per transformation      | `-poly 3`                                                    |                                 |                        |
 
 > The **pipeline** runs **before** the final **`-level`** packing.
 
@@ -126,7 +127,7 @@ Greet "Ada"
 ---
 
 
-## Obfuscation levels (1–5) + output snippets
+## Obfuscation levels (1–6) + output snippets
 
 > The following show the **shape** of outputs (snippets). Actual payloads will differ.
 
@@ -192,6 +193,18 @@ $','answer = 42','
 function G','reet($name)',' { Write-Ho','st ("Hi, " ','+ $name) }
 ','Greet "Ada"','
 '); $script = $fragments -join ''; Invoke-Expression $script
+```
+
+### Level 6 — AES Encryption
+
+```bash
+psobf -i sample.ps1 -o out.ps1 -level 6
+```
+
+**Output (snippet):**
+
+```powershell
+$k=[Convert]::FromBase64String('...base64key...');$iv=[Convert]::FromBase64String('...base64iv...');$e=[Convert]::FromBase64String('...base64ciphertext...');$a=New-Object Security.Cryptography.AesManaged;$a.Key=$k;$a.IV=$iv;$d=$a.CreateDecryptor();$bytes=$d.TransformFinalBlock($e,0,$e.Length);$dec=[Text.Encoding]::UTF8.GetString($bytes);Invoke-Expression $dec
 ```
 
 ---
@@ -398,6 +411,80 @@ $script=$fragments -join ''; Invoke-Expression $script
 
 ---
 
+### New Transforms (v1.2+)
+
+#### Hex Encoding (`hexenc`)
+
+Encodes string literals as hexadecimal.
+
+```bash
+psobf -i sample.ps1 -o out.ps1 -level 2 -pipeline "hexenc" -seed 42
+```
+
+**Output (snippet):**
+```powershell
+[Text.Encoding]::UTF8.GetString([Convert]::FromHexString('48656C6C6F'))
+```
+
+#### Alias Substitution (`alias`)
+
+Replaces PowerShell cmdlets with their short aliases.
+
+```bash
+psobf -i sample.ps1 -o out.ps1 -level 2 -pipeline "alias" -seed 42
+```
+
+**Output (snippet):**
+```powershell
+# Write-Host → echo/write/outright
+# Get-ChildItem → dir/ls/gci
+# ForEach-Object → foreach/%
+```
+
+#### Unicode Encoding (`unicode`)
+
+Converts string characters to `[char]0xNNNN` format.
+
+```bash
+psobf -i sample.ps1 -o out.ps1 -level 2 -pipeline "unicode" -seed 42
+```
+
+**Output (snippet):**
+```powershell
+"H[char]0x0065[char]0x006C[char]0x006Co"
+```
+
+#### Anti-Debugging (`antidebug`)
+
+Injects sandbox/VM/debugger detection snippets.
+
+```bash
+psobf -i sample.ps1 -o out.ps1 -level 4 -pipeline "antidebug" -seed 42
+```
+
+**Output (snippet):**
+```powershell
+if($env:COMPUTERNAME -match '^(SANDBOX|MALWARE|VIRUS)'){ exit }
+if((Get-WmiObject Win32_ComputerSystem).Model -match '^(VirtualBox|VMware)'){ exit }
+# ... original script ...
+```
+
+#### IEX Obfuscation (`iexobf`)
+
+Replaces `Invoke-Expression` with alternative forms.
+
+```bash
+psobf -i sample.ps1 -o out.ps1 -level 2 -pipeline "iexobf" -seed 42
+```
+
+**Output (snippet):**
+```powershell
+# Invoke-Expression → IEX or .
+. $code  # instead of Invoke-Expression $code
+```
+
+---
+
 ## Profiles (light, balanced, heavy)
 
 Presets are convenient starting points. Any explicit flag you pass **overrides** the preset.
@@ -559,6 +646,17 @@ psobf -i sample.ps1 -o out.ps1 -level 5 \
   -pipeline "iden,strenc,stringdict,numenc,fmt,cf,dead,frag" \
   -iden obf -strenc xor -strkey a1b2c3d4 -stringdict 35 -numenc \
   -fmt jitter -cf-opaque -deadcode 15 -frag profile=medium -seed 777
+
+# Level 6 - AES encryption (maximum protection)
+psobf -i sample.ps1 -o out.ps1 -level 6 -profile heavy -seed 999
+
+# New transforms - anti-debug + alias + hex
+psobf -i sample.ps1 -o out.ps1 -level 4 -pipeline "antidebug,alias,hexenc" -seed 42
+
+# All new transforms combined
+psobf -i sample.ps1 -o out.ps1 -level 6 \
+  -pipeline "iden,alias,hexenc,unicode,antidebug,iexobf,strenc" \
+  -iden obf -strenc rc4 -strkey 0011223344556677 -seed 42
 
 # Inspect artifact only (no Invoke-Expression)
 psobf -i sample.ps1 -o payload.txt -level 4 -noexec

@@ -23,7 +23,7 @@ func InitRNG(seedOpt *int64, seeded bool) *mathrand.Rand {
 	return mathrand.New(mathrand.NewSource(seed))
 }
 
-func RandIdent(r *mathrand.Rand, n int) string {
+func RandIdent(r RNGProvider, n int) string {
 	if n < 2 {
 		n = 2
 	}
@@ -40,7 +40,7 @@ func SumSha256(b []byte) []byte {
 	return h[:]
 }
 
-func RandPerm(r *mathrand.Rand, a []string) {
+func RandPerm(r RNGProvider, a []string) {
 	for i := range a {
 		j := r.Intn(i + 1)
 		a[i], a[j] = a[j], a[i]

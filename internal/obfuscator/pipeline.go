@@ -1,22 +1,20 @@
 package obfuscator
 
 import (
-    "encoding/base64"
-    "encoding/hex"
-    "fmt"
-    mathrand "math/rand"
-    "regexp"
-    "sort"
-    "strconv"
-    "strings"
+	"encoding/base64"
+	"encoding/hex"
+	"fmt"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
 )
-
 
 type IdentifierTransform struct{}
 
 func (t *IdentifierTransform) Name() string { return "iden" }
 
-func (t *IdentifierTransform) Apply(ps string, ctx *Ctx) (string, error) {
+func (t *IdentifierTransform) Apply(ps string, ctx TransformContext) (string, error) {
 	mapping := map[string]string{}
 	reservedPrefix := "$__"
 	rename := func(name string) string {
@@ -26,7 +24,7 @@ func (t *IdentifierTransform) Apply(ps string, ctx *Ctx) (string, error) {
 		if v, ok := mapping[name]; ok {
 			return v
 		}
-		n := RandIdent(ctx.Rng, len(name))
+		n := RandIdent(ctx.RNG(), len(name))
 		if strings.HasPrefix(name, "$") && !strings.HasPrefix(n, "$") {
 			n = "$" + n
 		}
@@ -37,13 +35,13 @@ func (t *IdentifierTransform) Apply(ps string, ctx *Ctx) (string, error) {
 	for _, m := range reFuncHeader.FindAllStringSubmatch(ps, -1) {
 		fn := m[1]
 		if _, ok := funcNames[fn]; !ok {
-			funcNames[fn] = RandIdent(ctx.Rng, len(fn))
+			funcNames[fn] = RandIdent(ctx.RNG(), len(fn))
 		}
 	}
 	for _, m := range reFuncNoParam.FindAllStringSubmatch(ps, -1) {
 		fn := m[1]
 		if _, ok := funcNames[fn]; !ok {
-			funcNames[fn] = RandIdent(ctx.Rng, len(fn))
+			funcNames[fn] = RandIdent(ctx.RNG(), len(fn))
 		}
 	}
 	for orig, neo := range funcNames {
@@ -60,16 +58,22 @@ type StringDictTransform struct {
 
 func (t *StringDictTransform) Name() string { return "stringdict" }
 
-func (t *StringDictTransform) Apply(ps string, ctx *Ctx) (string, error) {
+func (t *StringDictTransform) Apply(ps string, ctx TransformContext) (string, error) {
 	dq := reDQ.FindAllStringIndex(ps, -1)
 	sq := reSQ.FindAllStringIndex(ps, -1)
-	type span struct{ s, e int; dbl bool }
+	type span struct {
+		s, e int
+		dbl  bool
+	}
 	var spans []span
 	for _, p := range dq {
 		spans = append(spans, span{p[0], p[1], true})
 	}
 	for _, p := range sq {
 		spans = append(spans, span{p[0], p[1], false})
+	}
+	if len(spans) == 0 {
+		return ps, nil
 	}
 	sort.Slice(spans, func(i, j int) bool { return spans[i].s < spans[j].s })
 	var tokens []string
@@ -85,7 +89,7 @@ func (t *StringDictTransform) Apply(ps string, ctx *Ctx) (string, error) {
 				break
 			}
 			maxTok := 6
-			size := ctx.Rng.Intn(maxTok-minTok+1) + minTok
+			size := ctx.RNG().Intn(maxTok-minTok+1) + minTok
 			if size > left {
 				size = left
 			}
@@ -99,15 +103,20 @@ func (t *StringDictTransform) Apply(ps string, ctx *Ctx) (string, error) {
 	cursor := 0
 	var injected bool
 	for _, sp := range spans {
-		out.WriteString(ps[cursor:sp.s])
+		if sp.s < cursor || sp.e > len(ps) || sp.s >= sp.e {
+			continue
+		}
+		if sp.s > cursor {
+			out.WriteString(ps[cursor:sp.s])
+		}
 		raw := ps[sp.s:sp.e]
 		lit := raw
-		if strings.HasPrefix(lit, "\"") && strings.HasSuffix(lit, "\"") {
+		if strings.HasPrefix(lit, "\"") && strings.HasSuffix(lit, "\"") && len(lit) >= 2 {
 			lit = lit[1 : len(lit)-1]
-		} else if strings.HasPrefix(lit, "'") && strings.HasSuffix(lit, "'") {
+		} else if strings.HasPrefix(lit, "'") && strings.HasSuffix(lit, "'") && len(lit) >= 2 {
 			lit = lit[1 : len(lit)-1]
 		}
-		if t.Percent > 0 && len(lit) >= 10 && ctx.Rng.Intn(100) < t.Percent {
+		if t.Percent > 0 && len(lit) >= 10 && ctx.RNG().Intn(100) < t.Percent {
 			idxs := buildTokens(lit)
 			var parts []string
 			for _, id := range idxs {
@@ -120,7 +129,9 @@ func (t *StringDictTransform) Apply(ps string, ctx *Ctx) (string, error) {
 		}
 		cursor = sp.e
 	}
-	out.WriteString(ps[cursor:])
+	if cursor < len(ps) {
+		out.WriteString(ps[cursor:])
+	}
 	res := out.String()
 	if injected && len(tokens) > 0 {
 		var sb strings.Builder
@@ -154,9 +165,9 @@ type StringEncryptTransform struct {
 
 func (t *StringEncryptTransform) Name() string { return "strenc" }
 
-func (t *StringEncryptTransform) Apply(ps string, ctx *Ctx) (string, error) {
+func (t *StringEncryptTransform) Apply(ps string, ctx TransformContext) (string, error) {
 	if t.Mode == "xor" {
-		return encryptStrings(ps, ctx,
+		return encryptStrings(ps,
 			func(b []byte) (enc string, helper string) {
 				xb := make([]byte, len(b))
 				for i := range b {
@@ -176,8 +187,8 @@ func (t *StringEncryptTransform) Apply(ps string, ctx *Ctx) (string, error) {
 			})
 	}
 	if t.Mode == "rc4" {
-		fn := "__dec" + RandIdent(ctx.Rng, 6)
-		if !ctx.Helpers["rc4"] {
+		fn := "__dec" + RandIdent(ctx.RNG(), 6)
+		if !ctx.HasHelper("rc4") {
 			rc4Func := fmt.Sprintf(
 				`function %s($k,[byte[]]$d){$s=0..255;$j=0;for($i=0;$i -lt 256;$i++){`+
 					`$j=($j+$s[$i]+$k[$i%%$k.Length])%%256;$t=$s[$i];$s[$i]=$s[$j];$s[$j]=$t}`+
@@ -186,10 +197,10 @@ func (t *StringEncryptTransform) Apply(ps string, ctx *Ctx) (string, error) {
 					`$d[$x]=$d[$x] -bxor $s[($s[$i]+$s[$j])%%256]}`+
 					`[Text.Encoding]::UTF8.GetString($d)}`, fn)
 			ps = rc4Func + "\n" + ps
-			ctx.Helpers["rc4"] = true
+			ctx.AddHelper("rc4")
 		}
 		khex := strings.ToUpper(hex.EncodeToString(t.Key))
-		return encryptStrings(ps, ctx,
+		return encryptStrings(ps,
 			func(b []byte) (string, string) {
 				s := make([]byte, 256)
 				for i := 0; i < 256; i++ {
@@ -220,7 +231,7 @@ func (t *StringEncryptTransform) Apply(ps string, ctx *Ctx) (string, error) {
 	return ps, nil
 }
 
-func encryptStrings(ps string, ctx *Ctx, encfn func([]byte) (string, string), psExpr func(string) string) (string, error) {
+func encryptStrings(ps string, encfn func([]byte) (string, string), psExpr func(string) string) (string, error) {
 	idxs := reDQ.FindAllStringIndex(ps, -1)
 	idxs2 := reSQ.FindAllStringIndex(ps, -1)
 	type span struct{ s, e int }
@@ -231,18 +242,32 @@ func encryptStrings(ps string, ctx *Ctx, encfn func([]byte) (string, string), ps
 	for _, p := range idxs2 {
 		spans = append(spans, span{p[0], p[1]})
 	}
+	if len(spans) == 0 {
+		return ps, nil
+	}
 	sort.Slice(spans, func(i, j int) bool { return spans[i].s < spans[j].s })
 	var out strings.Builder
 	cursor := 0
 	for _, sp := range spans {
-		out.WriteString(ps[cursor:sp.s])
+		if sp.s < cursor || sp.e > len(ps) || sp.s >= sp.e {
+			continue
+		}
+		if sp.s > cursor {
+			out.WriteString(ps[cursor:sp.s])
+		}
 		raw := ps[sp.s:sp.e]
+		if len(raw) < 2 {
+			cursor = sp.e
+			continue
+		}
 		lit := raw[1 : len(raw)-1]
 		enc, _ := encfn([]byte(lit))
 		out.WriteString(psExpr(enc))
 		cursor = sp.e
 	}
-	out.WriteString(ps[cursor:])
+	if cursor < len(ps) {
+		out.WriteString(ps[cursor:])
+	}
 	return out.String(), nil
 }
 
@@ -266,14 +291,14 @@ func shouldSkipNumberContext(s string, start, end int) bool {
 	return false
 }
 
-func encodeNumber(n int, r *mathrand.Rand) string {
+func encodeNumber(n int, r RNGProvider) string {
 	c := r.Intn(5) + 1
 	b := r.Intn(0x7FFF)
 	a := (n + c) ^ b
 	return fmt.Sprintf("((0x%X -bxor 0x%X)-%d)", a, b, c)
 }
 
-func replaceNumsSafe(seg string, r *mathrand.Rand) string {
+func replaceNumsSafe(seg string, r RNGProvider) string {
 	var out strings.Builder
 	last := 0
 	idxs := reNum.FindAllStringIndex(seg, -1)
@@ -292,7 +317,7 @@ func replaceNumsSafe(seg string, r *mathrand.Rand) string {
 	return out.String()
 }
 
-func (t *NumberEncodeTransform) Apply(ps string, ctx *Ctx) (string, error) {
+func (t *NumberEncodeTransform) Apply(ps string, ctx TransformContext) (string, error) {
 	type seg struct{ s, e int }
 	var spans []seg
 	for _, p := range reDQ.FindAllStringIndex(ps, -1) {
@@ -307,13 +332,13 @@ func (t *NumberEncodeTransform) Apply(ps string, ctx *Ctx) (string, error) {
 	cursor := 0
 	for _, sp := range spans {
 		before := ps[cursor:sp.s]
-		before = replaceNumsSafe(before, ctx.Rng)
+		before = replaceNumsSafe(before, ctx.RNG())
 		out.WriteString(before)
 		out.WriteString(ps[sp.s:sp.e])
 		cursor = sp.e
 	}
 	rest := ps[cursor:]
-	rest = replaceNumsSafe(rest, ctx.Rng)
+	rest = replaceNumsSafe(rest, ctx.RNG())
 	out.WriteString(rest)
 	return out.String(), nil
 }
@@ -322,27 +347,27 @@ type FormatJitterTransform struct{}
 
 func (t *FormatJitterTransform) Name() string { return "fmt" }
 
-func (t *FormatJitterTransform) Apply(ps string, ctx *Ctx) (string, error) {
+func (t *FormatJitterTransform) Apply(ps string, ctx TransformContext) (string, error) {
 	lines := strings.Split(ps, "\n")
 	for i := range lines {
-		if ctx.Rng.Intn(100) < 35 {
+		if ctx.RNG().Intn(100) < 35 {
 			lines[i] = strings.TrimSpace(lines[i])
 		}
-		if ctx.Rng.Intn(100) < 30 {
+		if ctx.RNG().Intn(100) < 30 {
 			lines[i] = " " + lines[i]
 		}
-		if ctx.Rng.Intn(100) < 30 {
+		if ctx.RNG().Intn(100) < 30 {
 			lines[i] = lines[i] + " "
 		}
 	}
-	return strings.Join(lines, strings.Repeat("\n", 1+ctx.Rng.Intn(2))), nil
+	return strings.Join(lines, strings.Repeat("\n", 1+ctx.RNG().Intn(2))), nil
 }
 
 type CFOpaqueTransform struct{}
 
 func (t *CFOpaqueTransform) Name() string { return "cf-opaque" }
 
-func (t *CFOpaqueTransform) Apply(ps string, ctx *Ctx) (string, error) {
+func (t *CFOpaqueTransform) Apply(ps string, ctx TransformContext) (string, error) {
 	return fmt.Sprintf("if(1 -eq 1){\n%s\n}", ps), nil
 }
 
@@ -350,7 +375,7 @@ type CFShuffleTransform struct{}
 
 func (t *CFShuffleTransform) Name() string { return "cf-shuffle" }
 
-func (t *CFShuffleTransform) Apply(ps string, ctx *Ctx) (string, error) {
+func (t *CFShuffleTransform) Apply(ps string, ctx TransformContext) (string, error) {
 	type fb struct{ start, end int }
 	var blocks []fb
 	locs := reFuncNoParam.FindAllStringIndex(ps, -1)
@@ -373,7 +398,7 @@ func (t *CFShuffleTransform) Apply(ps string, ctx *Ctx) (string, error) {
 		cursor = b.end
 	}
 	out.WriteString(ps[cursor:])
-	RandPerm(ctx.Rng, mids)
+	RandPerm(ctx.RNG(), mids)
 	var buf strings.Builder
 	buf.WriteString(out.String())
 	for _, m := range mids {
@@ -406,11 +431,11 @@ type DeadCodeTransform struct{ Prob int }
 
 func (t *DeadCodeTransform) Name() string { return "deadcode" }
 
-func (t *DeadCodeTransform) Apply(ps string, ctx *Ctx) (string, error) {
-	if ctx.Rng.Intn(100) >= t.Prob {
+func (t *DeadCodeTransform) Apply(ps string, ctx TransformContext) (string, error) {
+	if ctx.RNG().Intn(100) >= t.Prob {
 		return ps, nil
 	}
-	fn := "__dummy" + RandIdent(ctx.Rng, 6)
+	fn := "__dummy" + RandIdent(ctx.RNG(), 6)
 	snippets := []string{
 		fmt.Sprintf("function %s{ return }", fn),
 		"for($i=0;$i -lt 0;$i++){Start-Sleep -Milliseconds 0}",
@@ -419,7 +444,7 @@ func (t *DeadCodeTransform) Apply(ps string, ctx *Ctx) (string, error) {
 	var out strings.Builder
 	out.WriteString(ps)
 	for _, s := range snippets {
-		if ctx.Rng.Intn(100) < t.Prob {
+		if ctx.RNG().Intn(100) < t.Prob {
 			out.WriteString("\n" + s + "\n")
 		}
 	}
