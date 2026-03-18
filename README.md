@@ -20,32 +20,42 @@ Supports 6 levels of obfuscation plus a transforms/pipeline architecture that al
 	Omar Salazar
 	v.2.0.0										 
 	
-Usage: ./psobf -i <inputFile> -o <outputFile> -level <1|2|3|4|5|6> [options]
+Usage: psobf -i <inputFile> -o <outputFile> -level <1|2|3|4|5|6> [options]
 
-  -cf-opaque		Enable opaque predicate wrapper.
-  -cf-shuffle		Shuffle function blocks.
-  -deadcode int		Dead-code injection probability (0..100).
-  -fmt string		Format jitter: off|jitter. (default "off")
-  -frag string		Fragmentation profile: profile=tight|medium|loose.
-  -fuzz int			Generate N fuzzed variants (unique seeds).
-  -i string			PowerShell script input file (use -stdin).
-  -iden string		Identifier morphing: obf|keep. (default "keep")
-  -level int		Obfuscation level (1..6). (default 1)
-  -maxfrag int		Maximum fragment size (level 5). (default 20)
-  -minfrag int		Minimum fragment size (level 5). (default 10)
-  -noexec			Emit only payload without Invoke-Expression.
-  -numenc			Enable number encoding.
-  -o string			Output file (use -stdout). (default "obfuscated.ps1")
-  -pipeline string	Comma-separated transforms: iden,strenc,stringdict,numenc,fmt,cf,dead
-  -profile string	Preset: light|balanced|heavy.
-  -q				Quiet mode (no banner).
-  -seed int			RNG seed (reproducible). Overrides crypto/rand if set.
-  -stdin			Read script from STDIN.
-  -stdout			Write result to STDOUT.
-  -strenc string	String encryption: off|xor|rc4. (default "off")
-  -stringdict int	String tokenization percentage (0..100).
-  -strkey string	Hex key for -strenc.
-  -varrename		Deprecated: kept for backward-compatibility. Use -iden obf.
+Obfuscation Levels:
+  1 - Char join encoding
+  2 - Base64 encoding
+  3 - Base64 encoding (alternate)
+  4 - GZip + Base64 compression
+  5 - Script fragmentation
+  6 - AES-256 CTR encryption (NEW in 2.0.0)
+
+Transform Pipeline Options (use with -pipeline):
+  iden       - Identifier morphing (use with -iden obf)
+  strenc     - String encryption (use with -strenc xor|rc4)
+  stringdict - String tokenization (use with -stringdict N)
+  numenc     - Number encoding
+  fmt        - Format jitter (use with -fmt jitter)
+  cf         - Control flow obfuscation (use with -cf-opaque, -cf-shuffle)
+  dead       - Dead code injection (use with -deadcode N)
+  hexenc     - Hex string encoding (NEW)
+  alias      - Cmdlet alias substitution (NEW)
+  unicode    - Unicode character encoding (NEW)
+  antidebug  - Anti-debugging/VM detection (NEW)
+  iexobf     - Invoke-Expression obfuscation (NEW)
+
+Examples:
+  # Simple obfuscation
+  psobf -i script.ps1 -o out.ps1 -level 2
+
+  # AES encryption with heavy profile
+  psobf -i script.ps1 -o out.ps1 -level 6 -profile heavy
+
+  # All new transforms
+  psobf -i script.ps1 -o out.ps1 -level 4 -pipeline "iden,alias,hexenc,antidebug,iexobf" -iden obf
+
+  # RC4 string encryption
+  psobf -i script.ps1 -o out.ps1 -level 4 -pipeline "strenc" -strenc rc4 -strkey 0011223344556677
 ```
 
 ## Features
@@ -65,7 +75,7 @@ Usage: ./psobf -i <inputFile> -o <outputFile> -level <1|2|3|4|5|6> [options]
 ## Installation
 
 ```bash
-go install github.com/TaurusOmar/psobf/cmd/psobf@v2.0.0
+go install github.com/TaurusOmar/psobf/v2/cmd/psobf@v2.0.0
 ```
 
 ---
