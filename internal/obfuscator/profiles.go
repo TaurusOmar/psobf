@@ -47,7 +47,7 @@ Obfuscation Levels:
   3 - Base64 encoding (alternate)
   4 - GZip + Base64 compression
   5 - Script fragmentation
-  6 - AES-256 CTR encryption (NEW in v1.2)
+  6 - AES-256 CTR encryption (NEW in v.2.0.0)
 
 Transform Pipeline Options (use with -pipeline):
   iden       - Identifier morphing (use with -iden obf)
