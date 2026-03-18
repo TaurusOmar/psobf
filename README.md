@@ -2,7 +2,7 @@
 
 Its goal is to transform code to hinder analysis and static signatures, useful in labs and authorized Red Team/Pentesting engagements.
 
-Supports 5 levels of obfuscation plus a transforms/pipeline architecture that allows stacking techniques such as string tokenization, light literal encryption, number masking, identifier morphing, format “jitter,” control-flow cosmetics, dead code injection, fragmentation profiles, and deterministic profiles.
+Supports 6 levels of obfuscation plus a transforms/pipeline architecture that allows stacking techniques such as string tokenization, light literal encryption, number masking, identifier morphing, format "jitter," control-flow cosmetics, dead code injection, fragmentation profiles, and deterministic profiles.
 
 ⚠️ Responsible use: this tool is intended for research and authorized testing only.
 **Do not** use for malicious purposes.
@@ -18,9 +18,9 @@ Supports 5 levels of obfuscation plus a transforms/pipeline architecture that al
 	██║     ███████║╚██████╔╝██████╔╝██║
 	╚═╝     ╚══════╝ ╚═════╝ ╚═════╝ ╚═╝
 	Omar Salazar
-	v.1.2.0										 	
+	v.2.0.0										 
 	
-Usage: ./psobf -i <inputFile> -o <outputFile> -level <1|2|3|4|5> [options]
+Usage: ./psobf -i <inputFile> -o <outputFile> -level <1|2|3|4|5|6> [options]
 
   -cf-opaque		Enable opaque predicate wrapper.
   -cf-shuffle		Shuffle function blocks.
@@ -30,7 +30,7 @@ Usage: ./psobf -i <inputFile> -o <outputFile> -level <1|2|3|4|5> [options]
   -fuzz int			Generate N fuzzed variants (unique seeds).
   -i string			PowerShell script input file (use -stdin).
   -iden string		Identifier morphing: obf|keep. (default "keep")
-  -level int		Obfuscation level (1..5). (default 1)
+  -level int		Obfuscation level (1..6). (default 1)
   -maxfrag int		Maximum fragment size (level 5). (default 20)
   -minfrag int		Minimum fragment size (level 5). (default 10)
   -noexec			Emit only payload without Invoke-Expression.
@@ -65,7 +65,7 @@ Usage: ./psobf -i <inputFile> -o <outputFile> -level <1|2|3|4|5> [options]
 ## Installation
 
 ```bash
-go install github.com/TaurusOmar/psobf/cmd/psobf@latest
+go install github.com/TaurusOmar/psobf/cmd/psobf@v2.0.0
 ```
 
 ---
@@ -73,7 +73,36 @@ go install github.com/TaurusOmar/psobf/cmd/psobf@latest
 ## Quick start
 
 ```bash
-psobf -i input.ps1 -o out.ps1 -level 1..5 [options]
+psobf -i input.ps1 -o out.ps1 -level 1..6 [options]
+psobf -h   # full help
+```
+
+## Features
+
+<h1 align="center">
+  <img src="static/poc.gif" alt="psobf" width="700px"></a>
+  <br>
+</h1>
+
+<h1 align="center">
+  <img src="static/poc2.gif" alt="psobf" width="700px"></a>
+  <br>
+</h1>
+
+--- 
+
+## Installation
+
+```bash
+go install github.com/TaurusOmar/psobf/cmd/psobf@v2.0.0
+```
+
+---
+
+## Quick start
+
+```bash
+psobf -i input.ps1 -o out.ps1 -level 1..6 [options]
 psobf -h   # full help
 ```
 
@@ -411,7 +440,7 @@ $script=$fragments -join ''; Invoke-Expression $script
 
 ---
 
-### New Transforms (v1.2+)
+### New Transforms (v2.0+)
 
 #### Hex Encoding (`hexenc`)
 
